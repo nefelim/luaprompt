@@ -59,11 +59,17 @@
  * available. */
 
 #define MAXINPUT 1024
+#define AUTO_FREE __attribute__((cleanup(auto_free)))
+
+static void auto_free(void** mem)
+{
+    free(*mem);
+}
 
 static char *readline(char *prompt)
 {
     char *line = NULL;
-    int k;
+    int k = 0;
 
     line = malloc (MAXINPUT);
 
@@ -71,6 +77,7 @@ static char *readline(char *prompt)
     fflush(stdout);
 
     if (!fgets(line, MAXINPUT, stdin)) {
+        free(line);
         return NULL;
     }
 
@@ -1533,7 +1540,6 @@ void luap_enter(lua_State *L)
 {
     int incomplete = 0, s = 0, t = 0, l;
     struct sigaction oldsigint;
-    char *line, *prepended;
 #ifdef SAVE_RESULTS
     int cleanup = 0;
 #endif
@@ -1614,8 +1620,10 @@ void luap_enter(lua_State *L)
     }
 
     while (1) {
-        struct sigaction newsigint;
-        int status;
+        struct sigaction newsigint = {};
+        int status = 0;
+        AUTO_FREE char* line = NULL;
+        AUTO_FREE char* prepended = NULL;
 
         /* Set up signal handlers to catch SIGINT and cancel the currently
          * input line, as is done in most interactive command
@@ -1637,7 +1645,6 @@ void luap_enter(lua_State *L)
         sigaction(SIGINT, &oldsigint, NULL);
 
         if (*line == '\0') {
-            free(line);
             continue;
         }
 
@@ -1722,9 +1729,6 @@ void luap_enter(lua_State *L)
             add_history (buffer);
         }
 #endif
-
-        free (prepended);
-        free (line);
     }
 
 #ifdef SAVE_RESULTS
